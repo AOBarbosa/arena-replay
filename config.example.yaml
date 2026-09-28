@@ -1,0 +1,46 @@
+# Copie para config.yaml e ajuste. Caminhos relativos são resolvidos a partir
+# da pasta deste arquivo.
+
+# Fuso usado apenas na exibição e no filtro ?date= da API. O banco guarda UTC.
+timezone: America/Fortaleza
+
+courts:
+  - id: court1                # usado no nome dos arquivos e na API: [a-z0-9_-]
+    name: Quadra 1
+    # IP Webcam (Android): use o stream RTSP H.264, não o MJPEG.
+    # stream_url: rtsp://192.168.0.50:8080/h264_ulaw.sdp
+    stream_url: rtsp://127.0.0.1:8554/court1   # scripts/fake_camera.sh
+    trigger_key: space        # nome de tecla do pynput (space, f1, enter...) ou um caractere
+
+capture:
+  segment_s: 2                # duração alvo; com -c copy o corte real acontece no keyframe
+  buffer_minutes: 10          # quanto histórico manter por quadra
+  latency_offset_s: 1.0       # atraso estimado do stream (horário do segmento - atraso = horário real)
+  audio: true                 # false descarta o áudio (-an); true transcodifica para AAC
+  rtsp_transport: tcp
+  reconnect_min_s: 1
+  reconnect_max_s: 30
+  stall_timeout_s: 15         # sem segmento novo por esse tempo = reinicia o ffmpeg
+
+clip:
+  duration_s: 30              # segundos antes do gatilho
+  post_roll_s: 3              # segundos depois do gatilho
+  # copy              -> sem recodificar (rápido, corte preciso só em keyframes)
+  # libx264           -> recodifica em CPU (preciso, pesado no i3)
+  # h264_vaapi        -> recodifica com Intel Quick Sync (Ubuntu)
+  # h264_videotoolbox -> recodifica em hardware no macOS (apenas desenvolvimento)
+  encoder: copy
+  vaapi_device: /dev/dri/renderD128
+
+trigger:
+  debounce_s: 5               # ignora novos gatilhos da mesma quadra nesse intervalo
+
+paths:
+  segments_dir: data/segments
+  clips_dir: data/clips
+
+api:
+  host: 127.0.0.1
+  port: 8000
+  cors_origins:
+    - http://localhost:3000   # futuro app Next.js
