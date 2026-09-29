@@ -151,6 +151,42 @@ fails if the API changes without it. After an intentional change, regenerate it:
 .venv/bin/python -m replay.api --export-openapi docs/openapi.json
 ```
 
+## Monitoring
+
+### Log files
+
+Each service also writes to `data/logs/<service>.log` (`capture`, `clipper`, `api`),
+rotated at midnight and kept for 14 days. To follow everything live in one terminal:
+
+```bash
+tail -F data/logs/*.log
+tail -F data/logs/*.log | grep -E "WARNING|ERROR"     # only problems
+```
+
+`LOG_LEVEL=DEBUG` shows more detail (e.g. harmless ffmpeg timestamp notices).
+HTTP requests are logged only when they fail (4xx/5xx), because the test page polls the API.
+
+### Live status
+
+Capture and clipper write a heartbeat every 5 s to `data/status/<service>.json`.
+`GET /api/v1/status` combines the heartbeats with the database check:
+
+- service `running`; `stopped` (clean shutdown, e.g. Ctrl+C); `down` (no heartbeat
+  for 15 s: crash, `kill -9`, frozen process); `unknown` (never ran on this machine)
+- per court: `recording`, `connecting`, `reconnecting` (camera offline), with the
+  age of the newest segment, reconnect count and last error
+- clipper: queue, clips ready/failed since start, last failure
+- `level`: `error` (database or a service down), `warning` (a camera is not
+  recording, or a clip failed in the last 10 minutes) or `ok`, plus `problems`
+  with the reasons
+
+The test page (`/dev`) shows this as a status bar refreshed every 3 s; hover a
+chip to see the last error.
+
+```bash
+curl -s localhost:8000/api/v1/status | python3 -m json.tool
+```
+
 ## Tests and lint
 
 ```bash
