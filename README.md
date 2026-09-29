@@ -5,7 +5,7 @@ trigger fires, the system builds a clip with the previous ~30 s.
 Architecture and rules in [CLAUDE.md](CLAUDE.md).
 
 > Work in progress. Done: **stage 1 — config, database and fake camera; stage 2 — capture;
-> stage 3 — trigger and clipper.**
+> stage 3 — trigger and clipper; stage 4 — API.**
 > The full README (phone setup, running the services) comes in stage 5.
 
 ## Requirements
@@ -117,7 +117,39 @@ watch the reconnect warnings in the log and start it again.
 Writes `data/clips/preview.html` with the latest clips (every status, including
 failed ones with their error) and opens it in the browser straight from disk.
 With `--watch`, the page is regenerated when clips change and reloads itself
-(never while a video is playing). Disposable: the API page comes in stage 4.
+(never while a video is playing). Unlike the API page below, it also shows
+`processing` and `failed` clips, which helps debugging.
+
+## API
+
+```bash
+.venv/bin/python -m replay.api     # http://127.0.0.1:8000 (api.host / api.port in config.yaml)
+```
+
+- Test page: <http://127.0.0.1:8000/dev> (filter by court and day, play, download;
+  new clips appear on their own). Disposable: the real UI will be the Next.js app.
+- Interactive docs: <http://127.0.0.1:8000/api/v1/docs>
+- To reach it from the phone or another PC on the network, set `api.host: 0.0.0.0`.
+
+| Endpoint | Description |
+|---|---|
+| `GET /api/v1/health` | `{"status": "ok", "database": true}` |
+| `GET /api/v1/courts` | Courts |
+| `GET /api/v1/clips?court_id=&date=&limit=&cursor=` | Ready clips, newest first. `date` is a local day (YYYY-MM-DD, `timezone` in config); `limit` 1–100 (default 20); pass `next_cursor` as `cursor` for the next page |
+| `GET /api/v1/clips/{id}` | One clip in any status (poll until `ready`) |
+| `GET /api/v1/clips/{id}/video` | MP4 with HTTP Range (seeking in the player) |
+| `GET /api/v1/clips/{id}/thumbnail` | JPEG |
+| `GET /api/v1/clips/{id}/download` | MP4 as attachment (`court1_2026-09-28_12-00-00.mp4`, local time) |
+
+All times in JSON are UTC (ISO 8601); convert to local time when displaying.
+CORS origins come from `api.cors_origins`.
+
+**Frontend contract:** [`docs/openapi.json`](docs/openapi.json) is committed and a test
+fails if the API changes without it. After an intentional change, regenerate it:
+
+```bash
+.venv/bin/python -m replay.api --export-openapi docs/openapi.json
+```
 
 ## Tests and lint
 
