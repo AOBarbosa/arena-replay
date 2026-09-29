@@ -10,7 +10,7 @@ courts:
     # IP Webcam (Android): use the RTSP H.264 stream, not MJPEG.
     # stream_url: rtsp://192.168.0.50:8080/h264_ulaw.sdp
     stream_url: rtsp://127.0.0.1:8554/court1   # scripts/fake_camera.sh
-    trigger_key: space        # pynput key name (space, f1, enter...) or a single character
+    trigger_key: f9           # pynput key name (f9, space, enter...) or one character; avoid keys people type
 
 capture:
   segment_s: 2                # target length; with -c copy the actual cut happens at keyframes
