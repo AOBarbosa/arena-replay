@@ -1,0 +1,142 @@
+<!doctype html>
+<!-- Minimal API test page. Disposable: the real UI will be the Next.js app. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ArenaReplay dev</title>
+<style>
+  :root { color-scheme: light dark; --muted: #888; --card: rgba(127,127,127,.1); --accent: #1976d2; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; margin: 0 auto; max-width: 1100px; padding: 16px; }
+  h1 { font-size: 1.25rem; margin: 0 0 12px; }
+  form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; }
+  select, input, button { font: inherit; padding: 6px 10px; border-radius: 6px; border: 1px solid #8886; }
+  button { background: var(--accent); color: #fff; border: 0; cursor: pointer; }
+  label.check { display: flex; gap: 6px; align-items: center; font-size: .9rem; }
+  #player { display: none; margin-bottom: 16px; }
+  #player video { width: 100%; max-height: 70vh; background: #000; border-radius: 8px; }
+  #player .row { display: flex; justify-content: space-between; margin-top: 6px; font-size: .9rem; }
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+  .card { background: var(--card); border-radius: 8px; overflow: hidden; cursor: pointer; }
+  .card img, .card .noimg { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; background: #0003; }
+  .card .info { padding: 6px 8px; font-size: .85rem; display: flex; justify-content: space-between; }
+  .card.active { outline: 3px solid var(--accent); }
+  .muted { color: var(--muted); font-size: .85rem; }
+  #more { margin: 16px auto; display: none; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<h1>ArenaReplay — API test page</h1>
+
+<form id="filters">
+  <select id="court"><option value="">All courts</option></select>
+  <input id="date" type="date">
+  <button type="submit">Search</button>
+  <label class="check"><input id="auto" type="checkbox" checked> auto-refresh</label>
+  <span class="muted"><a href="/api/v1/docs">API docs</a></span>
+</form>
+
+<div id="player">
+  <video id="video" controls playsinline></video>
+  <div class="row"><span id="caption"></span><a id="download" href="#">download</a></div>
+</div>
+
+<div id="status" class="muted"></div>
+<div id="grid" class="grid"></div>
+<button id="more">Load more</button>
+
+<script>
+const API = "/api/v1";
+const $ = (id) => document.getElementById(id);
+const courtNames = {};
+let nextCursor = null;
+let shownIds = new Set();
+
+const fmt = (iso) => new Date(iso).toLocaleString(undefined, {
+  day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit",
+});
+
+async function getJSON(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${res.status} ${(await res.json()).detail ?? ""}`);
+  return res.json();
+}
+
+function query(cursor) {
+  const params = new URLSearchParams({ limit: "24" });
+  if ($("court").value) params.set("court_id", $("court").value);
+  if ($("date").value) params.set("date", $("date").value);
+  if (cursor) params.set("cursor", cursor);
+  return `${API}/clips?${params}`;
+}
+
+function card(clip) {
+  const el = document.createElement("div");
+  el.className = "card";
+  el.dataset.id = clip.id;
+  el.innerHTML = `
+    ${clip.thumbnail_url ? `<img loading="lazy" alt="">` : `<div class="noimg"></div>`}
+    <div class="info"><strong></strong><span class="muted"></span></div>`;
+  if (clip.thumbnail_url) el.querySelector("img").src = clip.thumbnail_url;
+  el.querySelector("strong").textContent = courtNames[clip.court_id] ?? clip.court_id;
+  el.querySelector(".muted").textContent = `${fmt(clip.triggered_at)} · ${clip.duration_s?.toFixed(0)}s`;
+  el.onclick = () => play(clip, el);
+  return el;
+}
+
+function play(clip, el) {
+  document.querySelectorAll(".card.active").forEach((c) => c.classList.remove("active"));
+  el.classList.add("active");
+  $("player").style.display = "block";
+  $("video").src = clip.video_url;
+  $("video").play().catch(() => {});
+  $("download").href = clip.download_url;
+  $("caption").textContent = `${courtNames[clip.court_id] ?? clip.court_id} · ${fmt(clip.triggered_at)}`;
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+async function load(reset) {
+  try {
+    const page = await getJSON(query(reset ? null : nextCursor));
+    if (reset) { $("grid").innerHTML = ""; shownIds = new Set(); }
+    page.items.forEach((clip) => { shownIds.add(clip.id); $("grid").append(card(clip)); });
+    nextCursor = page.next_cursor;
+    $("more").style.display = nextCursor ? "block" : "none";
+    $("status").textContent = shownIds.size ? "" : "No clips yet.";
+  } catch (err) {
+    $("status").textContent = `Error: ${err.message}`;
+  }
+}
+
+// Prepends clips newer than the ones on screen (first page only)
+async function refresh() {
+  if (!$("auto").checked || document.hidden) return;
+  try {
+    const page = await getJSON(query(null));
+    const fresh = page.items.filter((c) => !shownIds.has(c.id)).reverse();
+    fresh.forEach((clip) => { shownIds.add(clip.id); $("grid").prepend(card(clip)); });
+    if (fresh.length) $("status").textContent = "";
+  } catch { /* try again on the next tick */ }
+}
+
+async function init() {
+  try {
+    for (const court of await getJSON(`${API}/courts`)) {
+      courtNames[court.id] = court.name;
+      $("court").append(new Option(court.name, court.id));
+    }
+  } catch (err) {
+    $("status").textContent = `Error: ${err.message}`;
+  }
+  $("filters").onsubmit = (e) => { e.preventDefault(); load(true); };
+  $("more").onclick = () => load(false);
+  await load(true);
+  setInterval(refresh, 5000);
+}
+
+init();
+</script>
+</body>
+</html>
