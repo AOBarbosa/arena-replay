@@ -1,0 +1,18 @@
+# systemd user unit. Installed by scripts/install_services.sh (@REPO_DIR@ is replaced).
+[Unit]
+Description=ArenaReplay capture (one ffmpeg per court)
+Documentation=file://@REPO_DIR@/README.md
+
+[Service]
+Type=simple
+WorkingDirectory=@REPO_DIR@
+Environment=PYTHONUNBUFFERED=1
+ExecStart=@REPO_DIR@/.venv/bin/python -m replay.capture
+Restart=on-failure
+RestartSec=5
+# SIGTERM lets ffmpeg close the current segment
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+[Install]
+WantedBy=default.target

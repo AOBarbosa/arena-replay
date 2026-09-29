@@ -1,0 +1,22 @@
+# systemd user unit. Installed by scripts/install_services.sh (@REPO_DIR@ is replaced).
+# The keyboard trigger needs the desktop (Xorg) session, so this unit is tied to it.
+[Unit]
+Description=ArenaReplay trigger and clipper
+Documentation=file://@REPO_DIR@/README.md
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+WorkingDirectory=@REPO_DIR@
+Environment=PYTHONUNBUFFERED=1
+ExecStart=@REPO_DIR@/.venv/bin/python -m replay.clipper
+# Also covers the database not being up yet right after boot
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGTERM
+# Lets the clip being built finish
+TimeoutStopSec=60
+
+[Install]
+WantedBy=graphical-session.target
