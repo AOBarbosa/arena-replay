@@ -1,4 +1,4 @@
-"""Modelos ORM. Toda alteração aqui precisa de uma migration do Alembic."""
+"""ORM models. Every change here requires an Alembic migration."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ class ClipRow(Base):
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     court_id: Mapped[str] = mapped_column(ForeignKey("courts.id"))
     triggered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    # Janela planejada no gatilho; atualizada com a janela real quando o clipe fica pronto
+    # Window planned at trigger time; updated with the actual window once the clip is ready
     start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     duration_s: Mapped[float | None] = mapped_column(Float)

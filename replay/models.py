@@ -1,4 +1,4 @@
-"""Dataclasses de domínio compartilhadas entre os serviços."""
+"""Domain dataclasses shared across services."""
 
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ class Clip:
 
 @dataclass(frozen=True, slots=True)
 class Segment:
-    """Um arquivo .ts do buffer. `end_at` é None quando ainda não se sabe o fim."""
+    """A .ts file in the buffer. `end_at` is None while the end is still unknown."""
 
     court_id: str
     path: Path

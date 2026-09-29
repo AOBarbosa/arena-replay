@@ -28,16 +28,16 @@ def make_ready_clip(repo: Repository, court_id: str, triggered_at: datetime):
 
 @pytest.fixture
 def courts(repo: Repository) -> None:
-    repo.sync_courts([Court("court1", "Quadra 1"), Court("court2", "Quadra 2")])
+    repo.sync_courts([Court("court1", "Court 1"), Court("court2", "Court 2")])
 
 
 def test_sync_courts_is_idempotent_and_updates_name(repo: Repository) -> None:
-    repo.sync_courts([Court("court1", "Quadra 1")])
-    repo.sync_courts([Court("court1", "Quadra Central"), Court("court2", "Quadra 2")])
+    repo.sync_courts([Court("court1", "Court 1")])
+    repo.sync_courts([Court("court1", "Center Court"), Court("court2", "Court 2")])
     courts = repo.list_courts()
     assert [(c.id, c.name) for c in courts] == [
-        ("court1", "Quadra Central"),
-        ("court2", "Quadra 2"),
+        ("court1", "Center Court"),
+        ("court2", "Court 2"),
     ]
     assert courts[0].created_at is not None
 
@@ -68,11 +68,11 @@ def test_clip_lifecycle(repo: Repository) -> None:
 def test_failed_and_orphans(repo: Repository) -> None:
     a = repo.create_clip("court1", T0, T0, T0)
     b = repo.create_clip("court1", T0, T0, T0)
-    repo.mark_clip_failed(a.id, "sem segmentos")
-    assert repo.fail_orphan_clips("worker reiniciado") == 1
-    assert repo.get_clip(a.id).error == "sem segmentos"
+    repo.mark_clip_failed(a.id, "no segments")
+    assert repo.fail_orphan_clips("worker restarted") == 1
+    assert repo.get_clip(a.id).error == "no segments"
     assert repo.get_clip(b.id).status is ClipStatus.FAILED
-    assert repo.get_clip(b.id).error == "worker reiniciado"
+    assert repo.get_clip(b.id).error == "worker restarted"
 
 
 def test_get_missing_clip(repo: Repository) -> None:
@@ -81,7 +81,7 @@ def test_get_missing_clip(repo: Repository) -> None:
 
 @pytest.mark.usefixtures("courts")
 def test_naive_datetime_rejected(repo: Repository) -> None:
-    with pytest.raises(ValueError, match="fuso"):
+    with pytest.raises(ValueError, match="timezone"):
         repo.create_clip("court1", datetime(2026, 1, 1), T0, T0)
 
 
@@ -90,7 +90,7 @@ def test_list_ready_clips_filters_and_order(repo: Repository) -> None:
     c1 = make_ready_clip(repo, "court1", T0)
     c2 = make_ready_clip(repo, "court1", T0 + timedelta(minutes=1))
     make_ready_clip(repo, "court2", T0 + timedelta(minutes=2))
-    repo.create_clip("court1", T0 + timedelta(minutes=3), T0, T0)  # processing: não aparece
+    repo.create_clip("court1", T0 + timedelta(minutes=3), T0, T0)  # processing: not listed
 
     all_clips = repo.list_ready_clips(limit=10)
     assert len(all_clips) == 3

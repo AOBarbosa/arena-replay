@@ -1,4 +1,4 @@
-"""Criação do engine e da fábrica de sessões SQLAlchemy."""
+"""SQLAlchemy engine and session factory creation."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 
 def make_engine(database_url: str) -> Engine:
-    # pool_pre_ping evita erro na primeira query depois de o container reiniciar
+    # pool_pre_ping avoids an error on the first query after the container restarts
     return create_engine(database_url, pool_pre_ping=True)
 
 

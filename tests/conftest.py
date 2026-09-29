@@ -1,4 +1,4 @@
-"""Fixtures compartilhadas. Os testes de banco usam o TEST_DATABASE_URL do .env."""
+"""Shared fixtures. Database tests use TEST_DATABASE_URL from .env."""
 
 from __future__ import annotations
 
@@ -26,13 +26,13 @@ class _TestEnv(BaseSettings):
 def test_database_url() -> str:
     url = _TestEnv().test_database_url
     if not url:
-        pytest.skip("TEST_DATABASE_URL não definido")
+        pytest.skip("TEST_DATABASE_URL is not set")
     engine = create_engine(url)
     try:
         with engine.connect():
             pass
-    except Exception as exc:  # noqa: BLE001 - qualquer falha de conexão vira skip
-        pytest.skip(f"banco de testes indisponível ({exc.__class__.__name__})")
+    except Exception as exc:  # noqa: BLE001 - any connection failure becomes a skip
+        pytest.skip(f"test database unavailable ({exc.__class__.__name__})")
     finally:
         engine.dispose()
     return url
@@ -40,7 +40,7 @@ def test_database_url() -> str:
 
 @pytest.fixture(scope="session")
 def migrated_db(test_database_url: str) -> str:
-    """Recria o schema do zero com as migrations (também testa o downgrade)."""
+    """Rebuilds the schema from scratch with migrations (also exercises downgrade)."""
     cfg = Config(str(ROOT / "alembic.ini"))
     cfg.set_main_option("sqlalchemy.url", test_database_url.replace("%", "%%"))
     cfg.attributes["configure_logger"] = False

@@ -17,7 +17,7 @@ def write(tmp_path: Path, content: str) -> Path:
 
 MINIMAL = """
 courts:
-  - {id: court1, name: Quadra 1, stream_url: rtsp://x/1, trigger_key: space}
+  - {id: court1, name: Court 1, stream_url: rtsp://x/1, trigger_key: space}
 """
 
 
@@ -36,8 +36,8 @@ def test_defaults_and_relative_paths(tmp_path: Path) -> None:
 
 
 def test_missing_file(tmp_path: Path) -> None:
-    with pytest.raises(ConfigError, match="não encontrado"):
-        load_app_config(tmp_path / "nada.yaml")
+    with pytest.raises(ConfigError, match="not found"):
+        load_app_config(tmp_path / "missing.yaml")
 
 
 @pytest.mark.parametrize(
@@ -45,16 +45,16 @@ def test_missing_file(tmp_path: Path) -> None:
     [
         ("courts: []", "courts"),
         (MINIMAL + "clip: {encoder: nvenc}", "encoder"),
-        (MINIMAL + "timezone: Marte/Olympus", "fuso"),
+        (MINIMAL + "timezone: Mars/Olympus", "timezone"),
         (MINIMAL + "capture: {segment_s: 0}", "segment_s"),
-        (MINIMAL + "desconhecido: 1", "desconhecido"),
+        (MINIMAL + "unknown_key: 1", "unknown_key"),
         (
             """
 courts:
   - {id: court1, name: A, stream_url: rtsp://x/1, trigger_key: a}
   - {id: court1, name: B, stream_url: rtsp://x/2, trigger_key: b}
 """,
-            "repetidos",
+            "duplicate court ids",
         ),
         (
             """
@@ -62,9 +62,9 @@ courts:
   - {id: court1, name: A, stream_url: rtsp://x/1, trigger_key: a}
   - {id: court2, name: B, stream_url: rtsp://x/2, trigger_key: a}
 """,
-            "teclas",
+            "duplicate trigger keys",
         ),
-        ("courts:\n  - {id: 'Quadra 1', name: A, stream_url: x, trigger_key: a}", "id"),
+        ("courts:\n  - {id: 'Court 1', name: A, stream_url: x, trigger_key: a}", "id"),
     ],
 )
 def test_invalid_configs(tmp_path: Path, content: str, message: str) -> None:
@@ -82,4 +82,4 @@ def test_env_settings_from_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
 def test_env_settings_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("DATABASE_URL", raising=False)
     with pytest.raises(ConfigError, match="DATABASE_URL|database_url"):
-        load_env_settings(tmp_path / "inexistente.env")
+        load_env_settings(tmp_path / "missing.env")

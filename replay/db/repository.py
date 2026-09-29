@@ -1,4 +1,4 @@
-"""Única camada que executa queries. O resto do código usa apenas esta classe."""
+"""The only layer that runs queries. The rest of the code uses only this class."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from replay.models import Clip, ClipStatus, Court
 
 log = logging.getLogger(__name__)
 
-# Posição na listagem: (triggered_at, id) do último clipe da página anterior
+# Listing position: (triggered_at, id) of the last clip on the previous page
 Cursor = tuple[datetime, UUID]
 
 
@@ -34,10 +34,10 @@ class Repository:
         if bind is not None:
             bind.dispose()
 
-    # --- quadras -----------------------------------------------------------
+    # --- courts ------------------------------------------------------------
 
     def sync_courts(self, courts: Iterable[Court]) -> None:
-        """Insere ou atualiza as quadras da configuração. Nunca apaga quadras."""
+        """Inserts or updates the configured courts. Never deletes courts."""
         rows = [{"id": c.id, "name": c.name} for c in courts]
         if not rows:
             return
@@ -53,10 +53,14 @@ class Repository:
             rows = session.scalars(select(CourtRow).order_by(CourtRow.id))
             return [_court(r) for r in rows]
 
-    # --- clipes ------------------------------------------------------------
+    # --- clips -------------------------------------------------------------
 
     def create_clip(
-        self, court_id: str, triggered_at: datetime, start_at: datetime, end_at: datetime
+        self,
+        court_id: str,
+        triggered_at: datetime,
+        start_at: datetime,
+        end_at: datetime,
     ) -> Clip:
         for value in (triggered_at, start_at, end_at):
             _require_aware(value)
@@ -100,7 +104,7 @@ class Repository:
         self._update_clip(clip_id, status=ClipStatus.FAILED, error=error)
 
     def fail_orphan_clips(self, reason: str) -> int:
-        """Marca como `failed` os clipes presos em `processing` (ex: worker morreu)."""
+        """Marks clips stuck in `processing` as `failed` (e.g. the worker died)."""
         stmt = (
             update(ClipRow)
             .where(ClipRow.status == ClipStatus.PROCESSING)
@@ -123,7 +127,7 @@ class Repository:
         until: datetime | None = None,
         cursor: Cursor | None = None,
     ) -> list[Clip]:
-        """Clipes prontos, mais recentes primeiro. `since` inclusivo, `until` exclusivo."""
+        """Ready clips, newest first. `since` is inclusive, `until` is exclusive."""
         stmt = select(ClipRow).where(ClipRow.status == ClipStatus.READY)
         if court_id is not None:
             stmt = stmt.where(ClipRow.court_id == court_id)
@@ -137,7 +141,9 @@ class Repository:
                 tuple_(ClipRow.triggered_at, ClipRow.id)
                 < tuple_(_require_aware(cursor_at), cursor_id)
             )
-        stmt = stmt.order_by(ClipRow.triggered_at.desc(), ClipRow.id.desc()).limit(limit)
+        stmt = stmt.order_by(ClipRow.triggered_at.desc(), ClipRow.id.desc()).limit(
+            limit
+        )
         with self._sessions() as session:
             return [_clip(r) for r in session.scalars(stmt)]
 
@@ -145,12 +151,14 @@ class Repository:
         stmt = update(ClipRow).where(ClipRow.id == clip_id).values(**values)
         with self._sessions.begin() as session:
             if session.execute(stmt).rowcount == 0:
-                log.warning("clipe %s não encontrado ao atualizar para %s", clip_id, values)
+                log.warning(
+                    "clip %s not found when updating to %s", clip_id, values
+                )
 
 
 def _require_aware(value: datetime) -> datetime:
     if value.tzinfo is None:
-        raise ValueError(f"datetime sem fuso horário: {value!r}")
+        raise ValueError(f"naive datetime (no timezone): {value!r}")
     return value
 
 

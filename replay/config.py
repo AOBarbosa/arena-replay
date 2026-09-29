@@ -1,4 +1,4 @@
-"""Carrega e valida a configuração: parâmetros em YAML e segredos no .env."""
+"""Loads and validates configuration: parameters from YAML, secrets from .env."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ CONFIG_PATH_ENV = "REPLAY_CONFIG"
 
 
 class ConfigError(Exception):
-    """Configuração ausente ou inválida."""
+    """Missing or invalid configuration."""
 
 
 class Encoder(StrEnum):
@@ -51,7 +51,7 @@ class CaptureConfig(_Strict):
     @model_validator(mode="after")
     def _check_backoff(self) -> Self:
         if self.reconnect_max_s < self.reconnect_min_s:
-            raise ValueError("reconnect_max_s deve ser >= reconnect_min_s")
+            raise ValueError("reconnect_max_s must be >= reconnect_min_s")
         return self
 
 
@@ -92,7 +92,7 @@ class AppConfig(_Strict):
         try:
             ZoneInfo(value)
         except ZoneInfoNotFoundError as exc:
-            raise ValueError(f"fuso horário desconhecido: {value}") from exc
+            raise ValueError(f"unknown timezone: {value}") from exc
         return value
 
     @model_validator(mode="after")
@@ -100,11 +100,11 @@ class AppConfig(_Strict):
         ids = [c.id for c in self.courts]
         duplicated = sorted({i for i in ids if ids.count(i) > 1})
         if duplicated:
-            raise ValueError(f"ids de quadra repetidos: {', '.join(duplicated)}")
+            raise ValueError(f"duplicate court ids: {', '.join(duplicated)}")
         keys = [c.trigger_key for c in self.courts]
         duplicated = sorted({k for k in keys if keys.count(k) > 1})
         if duplicated:
-            raise ValueError(f"teclas de gatilho repetidas: {', '.join(duplicated)}")
+            raise ValueError(f"duplicate trigger keys: {', '.join(duplicated)}")
         return self
 
     @property
@@ -119,7 +119,7 @@ class AppConfig(_Strict):
 
 
 class EnvSettings(BaseSettings):
-    """Segredos vindos do ambiente ou do arquivo .env."""
+    """Secrets from the environment or the .env file."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -127,7 +127,7 @@ class EnvSettings(BaseSettings):
 
 
 class Settings(BaseModel):
-    """Tudo o que um serviço precisa para iniciar."""
+    """Everything a service needs to start."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -136,20 +136,19 @@ class Settings(BaseModel):
 
 
 def load_app_config(path: Path | None = None) -> AppConfig:
-    """Lê o YAML, valida e resolve caminhos relativos à pasta do arquivo."""
+    """Reads the YAML, validates it and resolves paths relative to the file's folder."""
     path = path or Path(os.environ.get(CONFIG_PATH_ENV, DEFAULT_CONFIG_PATH))
     if not path.is_file():
         raise ConfigError(
-            f"arquivo de configuração não encontrado: {path} "
-            "(copie config.example.yaml para config.yaml)"
+            f"config file not found: {path} (copy config.example.yaml to config.yaml)"
         )
     try:
         raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         config = AppConfig.model_validate(raw)
     except yaml.YAMLError as exc:
-        raise ConfigError(f"YAML inválido em {path}: {exc}") from exc
+        raise ConfigError(f"invalid YAML in {path}: {exc}") from exc
     except ValidationError as exc:
-        raise ConfigError(f"configuração inválida em {path}:\n{exc}") from exc
+        raise ConfigError(f"invalid config in {path}:\n{exc}") from exc
     return _resolve_paths(config, path.resolve().parent)
 
 
@@ -159,7 +158,7 @@ def load_env_settings(env_file: Path | None = None) -> EnvSettings:
             return EnvSettings()
         return EnvSettings(_env_file=env_file)
     except ValidationError as exc:
-        raise ConfigError(f"variáveis de ambiente inválidas (confira o .env):\n{exc}") from exc
+        raise ConfigError(f"invalid environment variables (check .env):\n{exc}") from exc
 
 
 def load_settings(config_path: Path | None = None, env_file: Path | None = None) -> Settings:
