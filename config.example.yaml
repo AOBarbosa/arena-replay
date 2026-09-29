@@ -38,6 +38,8 @@ trigger:
 paths:
   segments_dir: data/segments
   clips_dir: data/clips
+  logs_dir: data/logs          # one file per service, rotated daily
+  status_dir: data/status      # service heartbeats read by the API (/api/v1/status)
 
 api:
   host: 127.0.0.1

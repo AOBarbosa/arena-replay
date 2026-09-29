@@ -69,6 +69,8 @@ class TriggerConfig(_Strict):
 class PathsConfig(_Strict):
     segments_dir: Path = Path("data/segments")
     clips_dir: Path = Path("data/clips")
+    logs_dir: Path = Path("data/logs")
+    status_dir: Path = Path("data/status")
 
 
 class ApiConfig(_Strict):
@@ -169,8 +171,5 @@ def _resolve_paths(config: AppConfig, base_dir: Path) -> AppConfig:
     def resolve(p: Path) -> Path:
         return p if p.is_absolute() else (base_dir / p).resolve()
 
-    paths = PathsConfig(
-        segments_dir=resolve(config.paths.segments_dir),
-        clips_dir=resolve(config.paths.clips_dir),
-    )
+    paths = PathsConfig(**{name: resolve(value) for name, value in config.paths})
     return config.model_copy(update={"paths": paths})
