@@ -25,10 +25,24 @@
   .muted { color: var(--muted); font-size: .85rem; }
   #more { margin: 16px auto; display: none; }
   a { color: var(--accent); }
+  .status { background: var(--card); border-radius: 8px; padding: 8px 10px; margin-bottom: 16px; }
+  .status .head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .chip { display: inline-flex; gap: 6px; align-items: center; font-size: .8rem;
+          padding: 3px 9px; border-radius: 99px; border: 1px solid #8884; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; }
+  .ok { background: #2e7d32; } .warning { background: #f9a825; } .error { background: #c62828; }
+  #problems { font-size: .85rem; }
 </style>
 </head>
 <body>
 <h1>ArenaReplay — API test page</h1>
+
+<div class="status">
+  <div class="head"><span id="level-dot" class="dot"></span><strong id="level">checking…</strong>
+    <span id="problems" class="muted"></span></div>
+  <div id="chips" class="chips"></div>
+</div>
 
 <form id="filters">
   <select id="court"><option value="">All courts</option></select>
@@ -121,7 +135,69 @@ async function refresh() {
   } catch { /* try again on the next tick */ }
 }
 
+// --- system status -------------------------------------------------------------
+const GOOD = new Set(["running", "recording"]);
+const PENDING = new Set(["connecting", "reconnecting", "starting"]);
+const levelOf = (state) => GOOD.has(state) ? "ok" : PENDING.has(state) ? "warning" : "error";
+
+function chip(level, text, title) {
+  const el = document.createElement("span");
+  el.className = "chip";
+  el.title = title ?? "";
+  el.innerHTML = `<span class="dot ${level}"></span><span></span>`;
+  el.lastChild.textContent = text;
+  return el;
+}
+
+function ago(iso) {
+  if (!iso) return "never";
+  const s = Math.max(0, Math.round((Date.now() - new Date(iso)) / 1000));
+  return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)}min ago` : fmt(iso);
+}
+
+function renderStatus(st) {
+  $("level").textContent = { ok: "All systems running", warning: "Warning", error: "Problem" }[st.level];
+  $("level-dot").className = `dot ${st.level}`;
+  $("problems").textContent = st.problems.join(" · ");
+  const chips = [chip(st.database ? "ok" : "error", `database ${st.database ? "ok" : "down"}`)];
+  for (const svc of st.services) {
+    let text = `${svc.name} ${svc.state}`;
+    if (svc.name === "clipper" && st.clipper) {
+      const c = st.clipper;
+      text += ` · ${c.ready_count} ready / ${c.failed_count} failed` +
+              (c.queue_size ? ` · ${c.queue_size} queued` : "") +
+              (c.processing ? " · building…" : "");
+    }
+    const title = svc.updated_at ? `pid ${svc.pid} · last heartbeat ${ago(svc.updated_at)}` : "";
+    chips.push(chip(levelOf(svc.state), text, title));
+  }
+  for (const court of st.courts) {
+    let text = `${court.name}: ${court.capture}`;
+    if (court.capture === "recording") text += ` · segment ${ago(court.last_segment_at)}`;
+    if (court.restarts) text += ` · ${court.restarts} reconnect(s)`;
+    const title = court.last_error ? `last error (${ago(court.last_error_at)}): ${court.last_error}` : "";
+    chips.push(chip(levelOf(court.capture), text, title));
+  }
+  if (st.clipper?.last_error) {
+    chips.push(chip("warning", `last clip error ${ago(st.clipper.last_error_at)}`, st.clipper.last_error));
+  }
+  $("chips").replaceChildren(...chips);
+}
+
+async function pollStatus() {
+  try {
+    renderStatus(await getJSON(`${API}/status`));
+  } catch (err) {
+    $("level").textContent = "API unreachable";
+    $("level-dot").className = "dot error";
+    $("problems").textContent = err.message;
+    $("chips").replaceChildren();
+  }
+}
+
 async function init() {
+  pollStatus();
+  setInterval(pollStatus, 3000);
   try {
     for (const court of await getJSON(`${API}/courts`)) {
       courtNames[court.id] = court.name;
