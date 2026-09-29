@@ -135,7 +135,7 @@ Tabela `clips`: `id` (uuid), `court_id` (FK), `triggered_at`, `start_at`, `end_a
 - Type hints em tudo, funções pequenas, logging com o módulo `logging` (nunca `print`), incluindo `court_id` nas mensagens.
 - Todo comando ffmpeg é montado em uma função testável que retorna a lista de argumentos.
 - Testes para `segment_index`, montagem de comandos ffmpeg, repositório (contra um Postgres de teste em Docker) e debounce. Testes de integração podem usar o `fake_camera.sh`.
-- Comentários e mensagens de log em português.
+- Tudo em inglês: código, comentários, docstrings, mensagens de log e de erro, README, configs de exemplo, scripts, testes e mensagens de commit (Conventional Commits: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`).
 
 ## Forma de trabalho
 
