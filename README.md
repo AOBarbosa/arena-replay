@@ -4,7 +4,8 @@ Instant replay for beach courts: a camera records continuously and, when the
 trigger fires, the system builds a clip with the previous ~30 s.
 Architecture and rules in [CLAUDE.md](CLAUDE.md).
 
-> Work in progress. Done: **stage 1 — config, database and fake camera; stage 2 — capture.**
+> Work in progress. Done: **stage 1 — config, database and fake camera; stage 2 — capture;
+> stage 3 — trigger and clipper.**
 > The full README (phone setup, running the services) comes in stage 5.
 
 ## Requirements
@@ -74,6 +75,49 @@ to mimic a phone with a long GOP).
 
 To test reconnection: with capture running, stop `fake_camera.sh` (Ctrl+C),
 watch the reconnect warnings in the log and start it again.
+
+## Trigger and clipper
+
+```bash
+.venv/bin/python -m replay.clipper           # global keyboard trigger (keys from config.yaml)
+.venv/bin/python -m replay.clipper --stdin   # dev: Enter (or a court id) in the terminal
+```
+
+- The keyboard trigger uses pynput: on Ubuntu it needs an **Xorg** session (not
+  Wayland; pick "Ubuntu on Xorg" on the login screen). On macOS, grant the terminal
+  *Input Monitoring* in System Settings → Privacy & Security. Over SSH, use `--stdin`.
+- Repeated triggers for the same court within `trigger.debounce_s` are ignored.
+- Each trigger enqueues a job (the trigger never waits). The worker writes a lease,
+  waits for the post-roll and for the segment covering the end to close, then
+  concatenates the segments, writes an MP4 with `+faststart` plus a JPG thumbnail,
+  and registers the clip (`processing` → `ready` or `failed`).
+- Clips are stored under `data/clips/<court_id>/<YYYY/MM/DD UTC>/<clip_id>.mp4`.
+- `capture.latency_offset_s` compensates the stream delay: the clip window is
+  shifted by it so the play lands at the end of the clip. Calibrate it by filming a
+  clock and comparing with the trigger time.
+- Gaps in the buffer (camera offline) do not break the clip: it is built with what
+  exists and a warning is logged. With no segments at all, the clip is `failed`.
+- On start, clips left in `processing` by a crash are marked `failed`.
+
+### `clip.encoder` trade-off
+
+| encoder | cost | start of the clip |
+|---|---|---|
+| `copy` (default) | almost free | snaps to the keyframe at or before the requested time (up to one GOP earlier) |
+| `libx264` | heavy CPU on the i3 | exact |
+| `h264_vaapi` | Intel Quick Sync (Ubuntu) | exact |
+| `h264_videotoolbox` | Apple hardware (dev only) | exact |
+
+## Clip preview (development only)
+
+```bash
+.venv/bin/python -m replay.devtools.preview --watch --open
+```
+
+Writes `data/clips/preview.html` with the latest clips (every status, including
+failed ones with their error) and opens it in the browser straight from disk.
+With `--watch`, the page is regenerated when clips change and reloads itself
+(never while a video is playing). Disposable: the API page comes in stage 4.
 
 ## Tests and lint
 
