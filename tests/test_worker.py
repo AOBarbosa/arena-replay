@@ -66,6 +66,9 @@ def test_process_builds_and_registers_clip(tmp_path: Path, repo: Repository) -> 
     assert storage.local_path(clip.thumb_key).is_file()  # type: ignore[arg-type,union-attr]
     assert list(leases_dir(config.paths.segments_dir, "court1").iterdir()) == []
     assert not (config.paths.clips_dir / ".work" / str(job.clip_id)).exists()
+    status = worker.status()
+    assert (status["ready_count"], status["failed_count"]) == (1, 0)
+    assert status["last_ready_at"] is not None
 
 
 @requires_ffmpeg
@@ -83,6 +86,9 @@ def test_process_without_segments_marks_failed(tmp_path: Path, repo: Repository)
     assert clip.status is ClipStatus.FAILED
     assert "no segments" in (clip.error or "")
     assert not job.lease.path.exists()
+    status = worker.status()
+    assert (status["ready_count"], status["failed_count"]) == (0, 1)
+    assert status["last_error"].startswith("[court1] no segments")
 
 
 def test_start_fails_orphans(tmp_path: Path, repo: Repository) -> None:

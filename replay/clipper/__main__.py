@@ -13,8 +13,9 @@ from types import FrameType
 from replay.clipper.worker import ClipWorker
 from replay.config import ConfigError, load_settings
 from replay.db.repository import Repository
-from replay.logs import setup_logging
+from replay.logs import add_file_logging, setup_logging
 from replay.models import Court
+from replay.status import Heartbeat
 from replay.storage.local import LocalClipStorage
 from replay.triggers.base import Trigger, TriggerError
 from replay.triggers.keyboard import KeyboardTrigger
@@ -41,6 +42,7 @@ def main(argv: list[str] | None = None) -> int:
     except ConfigError as exc:
         log.error("%s", exc)
         return 2
+    add_file_logging("clipper", settings.app.paths.logs_dir)
     for tool in ("ffmpeg", "ffprobe"):
         if shutil.which(tool) is None:
             log.error("%s not found in PATH", tool)
@@ -63,6 +65,11 @@ def main(argv: list[str] | None = None) -> int:
             {c.trigger_key: c.id for c in config.courts}, config.trigger.debounce_s
         )
 
+    trigger_kind = "stdin" if args.stdin else "keyboard"
+    heartbeat = Heartbeat(
+        config.paths.status_dir, "clipper", lambda: {"trigger": trigger_kind, **worker.status()}
+    )
+
     stop = threading.Event()
 
     def on_signal(signum: int, _frame: FrameType | None) -> None:
@@ -79,6 +86,7 @@ def main(argv: list[str] | None = None) -> int:
         log.error("%s", exc)
         worker.stop()
         return 2
+    heartbeat.start()
     log.info(
         "clipper ready: %g s before + %g s after the trigger, encoder=%s",
         config.clip.duration_s,
@@ -91,6 +99,7 @@ def main(argv: list[str] | None = None) -> int:
 
     trigger.stop()
     worker.stop()
+    heartbeat.stop()
     repo.dispose()
     return 0
 

@@ -11,6 +11,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 from uuid import UUID, uuid4
 
 from replay.buffer import Lease, list_segments, remove_lease, write_lease
@@ -72,6 +73,26 @@ class ClipWorker:
         self._queue: queue.Queue[ClipJob] = queue.Queue()
         self._stopping = threading.Event()
         self._thread = threading.Thread(target=self._run, name="clip-worker", daemon=True)
+        # Counters for the heartbeat (written only by the worker thread)
+        self._current: ClipJob | None = None
+        self._ready_count = 0
+        self._failed_count = 0
+        self._last_ready_at: datetime | None = None
+        self._last_error: str | None = None
+        self._last_error_at: datetime | None = None
+
+    def status(self) -> dict[str, Any]:
+        current = self._current
+        return {
+            "queue_size": self._queue.qsize(),
+            "processing": str(current.clip_id) if current else None,
+            "processing_court": current.court_id if current else None,
+            "ready_count": self._ready_count,
+            "failed_count": self._failed_count,
+            "last_ready_at": self._last_ready_at,
+            "last_error": self._last_error,
+            "last_error_at": self._last_error_at,
+        }
 
     # --- lifecycle ------------------------------------------------------------
 
@@ -123,7 +144,11 @@ class ClipWorker:
                 job = self._queue.get(timeout=0.5)
             except queue.Empty:
                 continue
-            self.process(job)
+            self._current = job
+            try:
+                self.process(job)
+            finally:
+                self._current = None
 
     def process(self, job: ClipJob) -> None:
         """Produces one clip end to end. Never raises: failures are stored on the clip."""
@@ -136,8 +161,9 @@ class ClipWorker:
                 job.window_end - self._offset,
                 clip_id=job.clip_id,
             )
-        except Exception:
+        except Exception as exc:
             log.exception("[%s] could not register clip %s", job.court_id, job.clip_id)
+            self._note_failure(job, f"could not register the clip in the database: {exc}")
             remove_lease(job.lease)
             return
         try:
@@ -192,6 +218,8 @@ class ClipWorker:
             file_key=file_key,
             thumb_key=thumb_key,
         )
+        self._ready_count += 1
+        self._last_ready_at = datetime.now(UTC)
         log.info(
             "[%s] clip %s ready (%.1f s, %s)",
             job.court_id,
@@ -223,7 +251,13 @@ class ClipWorker:
             resolve_ends(candidates, self._probe), job.window_start, job.window_end
         )
 
+    def _note_failure(self, job: ClipJob, error: str) -> None:
+        self._failed_count += 1
+        self._last_error = f"[{job.court_id}] {error}"
+        self._last_error_at = datetime.now(UTC)
+
     def _mark_failed(self, job: ClipJob, error: str) -> None:
+        self._note_failure(job, error)
         try:
             self._repo.mark_clip_failed(job.clip_id, error)
         except Exception:
