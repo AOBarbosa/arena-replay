@@ -27,6 +27,28 @@
         }
       }
     },
+    "/api/v1/status": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "System Status",
+        "description": "Live state of every service and court camera, from the service heartbeats.",
+        "operationId": "system_status_api_v1_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemStatusOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/courts": {
       "get": {
         "tags": [
@@ -452,6 +474,101 @@
         ],
         "title": "ClipStatus"
       },
+      "ClipperStatusOut": {
+        "properties": {
+          "trigger": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger",
+            "examples": [
+              "keyboard"
+            ]
+          },
+          "queue_size": {
+            "type": "integer",
+            "title": "Queue Size",
+            "default": 0
+          },
+          "processing": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Processing"
+          },
+          "processing_court": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Processing Court"
+          },
+          "ready_count": {
+            "type": "integer",
+            "title": "Ready Count",
+            "description": "Clips ready since the clipper started",
+            "default": 0
+          },
+          "failed_count": {
+            "type": "integer",
+            "title": "Failed Count",
+            "description": "Clips failed since the clipper started",
+            "default": 0
+          },
+          "last_ready_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Ready At"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "last_error_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error At"
+          }
+        },
+        "type": "object",
+        "title": "ClipperStatusOut"
+      },
       "CourtOut": {
         "properties": {
           "id": {
@@ -475,6 +592,103 @@
           "name"
         ],
         "title": "CourtOut"
+      },
+      "CourtStatusOut": {
+        "properties": {
+          "court_id": {
+            "type": "string",
+            "title": "Court Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "capture": {
+            "type": "string",
+            "enum": [
+              "connecting",
+              "recording",
+              "reconnecting",
+              "starting",
+              "stopped",
+              "down",
+              "unknown"
+            ],
+            "title": "Capture"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since",
+            "description": "When `capture` last changed"
+          },
+          "last_segment_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Segment At"
+          },
+          "segment_age_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Segment Age S",
+            "description": "Seconds since the newest segment started"
+          },
+          "restarts": {
+            "type": "integer",
+            "title": "Restarts",
+            "default": 0
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "last_error_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "court_id",
+          "name",
+          "capture"
+        ],
+        "title": "CourtStatusOut"
       },
       "HTTPValidationError": {
         "properties": {
@@ -509,6 +723,136 @@
           "database"
         ],
         "title": "HealthOut"
+      },
+      "ServiceStatusOut": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "examples": [
+              "capture"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "running",
+              "stopped",
+              "down",
+              "unknown"
+            ],
+            "title": "State",
+            "description": "running; stopped (clean shutdown); down (heartbeat lost: crash or killed); unknown (never ran here)"
+          },
+          "pid": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pid"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At",
+            "description": "Last heartbeat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "state"
+        ],
+        "title": "ServiceStatusOut"
+      },
+      "SystemStatusOut": {
+        "properties": {
+          "level": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "warning",
+              "error"
+            ],
+            "title": "Level",
+            "description": "error: a service or the database is down; warning: a court is not recording or a clip failed recently; ok otherwise"
+          },
+          "problems": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Problems",
+            "description": "Human-readable reasons for the level"
+          },
+          "checked_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Checked At"
+          },
+          "database": {
+            "type": "boolean",
+            "title": "Database"
+          },
+          "services": {
+            "items": {
+              "$ref": "#/components/schemas/ServiceStatusOut"
+            },
+            "type": "array",
+            "title": "Services"
+          },
+          "courts": {
+            "items": {
+              "$ref": "#/components/schemas/CourtStatusOut"
+            },
+            "type": "array",
+            "title": "Courts"
+          },
+          "clipper": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClipperStatusOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when the clipper is not running"
+          }
+        },
+        "type": "object",
+        "required": [
+          "level",
+          "problems",
+          "checked_at",
+          "database",
+          "services",
+          "courts"
+        ],
+        "title": "SystemStatusOut"
       },
       "ValidationError": {
         "properties": {

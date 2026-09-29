@@ -13,7 +13,7 @@ import uvicorn
 from replay.api.app import create_app
 from replay.config import ConfigError, load_settings
 from replay.db.repository import Repository
-from replay.logs import setup_logging
+from replay.logs import add_file_logging, setup_logging
 from replay.storage.local import LocalClipStorage
 
 log = logging.getLogger("replay.api")
@@ -36,6 +36,8 @@ def main(argv: list[str] | None = None) -> int:
         log.error("%s", exc)
         return 2
     config = settings.app
+    if not args.export_openapi:
+        add_file_logging("api", config.paths.logs_dir)
     repo = Repository.from_url(settings.env.database_url)
     app = create_app(config, repo, LocalClipStorage(config.paths.clips_dir))
 

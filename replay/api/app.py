@@ -6,7 +6,7 @@ from __future__ import annotations
 import base64
 import binascii
 import logging
-from datetime import date, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from importlib import resources
 from typing import Annotated
 from uuid import UUID
@@ -15,7 +15,8 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 
-from replay.api.schemas import ClipOut, ClipPage, CourtOut, HealthOut
+from replay.api.schemas import ClipOut, ClipPage, CourtOut, HealthOut, SystemStatusOut
+from replay.api.system_status import build_status
 from replay.config import AppConfig
 from replay.db.repository import Cursor, Repository
 from replay.models import Clip, ClipStatus
@@ -148,6 +149,12 @@ def health(repo: RepoDep) -> HealthOut:
     return HealthOut(status="ok" if database else "degraded", database=database)
 
 
+@router.get("/status", tags=["system"])
+def system_status(request: Request, repo: RepoDep, config: ConfigDep) -> SystemStatusOut:
+    """Live state of every service and court camera, from the service heartbeats."""
+    return build_status(config, repo, request.app.state.started_at, datetime.now(UTC))
+
+
 @router.get("/courts", tags=["courts"])
 def list_courts(repo: RepoDep) -> list[CourtOut]:
     return [CourtOut(id=c.id, name=c.name) for c in repo.list_courts()]
@@ -241,6 +248,7 @@ def create_app(config: AppConfig, repo: Repository, storage: ClipStorage) -> Fas
     app.state.config = config
     app.state.repo = repo
     app.state.storage = storage
+    app.state.started_at = datetime.now(UTC)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=config.api.cors_origins,

@@ -12,6 +12,7 @@ from replay.api.app import create_app, decode_cursor, encode_cursor
 from replay.config import ApiConfig, AppConfig, CourtConfig, PathsConfig
 from replay.db.repository import Repository
 from replay.models import Clip, ClipStatus, Court
+from replay.status import RUNNING, STOPPED, write_heartbeat
 from replay.storage.local import LocalClipStorage
 
 # 15:00 UTC = 12:00 in Fortaleza (UTC-3)
@@ -28,7 +29,12 @@ def storage(tmp_path: Path) -> LocalClipStorage:
 def client(tmp_path: Path, repo: Repository, storage: LocalClipStorage) -> TestClient:
     config = AppConfig(
         courts=[CourtConfig(id="court1", name="Court 1", stream_url="x", trigger_key="a")],
-        paths=PathsConfig(segments_dir=tmp_path / "seg", clips_dir=tmp_path / "clips"),
+        paths=PathsConfig(
+            segments_dir=tmp_path / "seg",
+            clips_dir=tmp_path / "clips",
+            logs_dir=tmp_path / "logs",
+            status_dir=tmp_path / "status",
+        ),
         api=ApiConfig(cors_origins=["http://localhost:3000"]),
     )
     repo.sync_courts([Court("court1", "Court 1"), Court("court2", "Court 2")])
@@ -198,3 +204,90 @@ def test_committed_openapi_matches_app(client: TestClient) -> None:
     `python -m replay.api --export-openapi docs/openapi.json`."""
     committed = json.loads((Path(__file__).parent.parent / "docs" / "openapi.json").read_text())
     assert client.app.openapi() == committed
+
+
+# --- /status -----------------------------------------------------------------------
+
+
+def status_dir(client: TestClient) -> Path:
+    return client.app.state.config.paths.status_dir
+
+
+def recording_court(now: datetime, **extra: object) -> dict[str, object]:
+    return {
+        "state": "recording",
+        "since": now - timedelta(minutes=5),
+        "restarts": 0,
+        "last_segment_at": now - timedelta(seconds=1),
+        "last_error": None,
+        "last_error_at": None,
+        **extra,
+    }
+
+
+def test_status_all_ok(client: TestClient) -> None:
+    now = datetime.now(UTC)
+    write_heartbeat(
+        status_dir(client), "capture", RUNNING, now, {"courts": {"court1": recording_court(now)}}
+    )
+    write_heartbeat(
+        status_dir(client), "clipper", RUNNING, now, {"trigger": "keyboard", "ready_count": 2}
+    )
+
+    body = client.get("/api/v1/status").json()
+    assert body["level"] == "ok", body["problems"]
+    assert body["database"] is True
+    assert {s["name"]: s["state"] for s in body["services"]} == {
+        "api": "running",
+        "capture": "running",
+        "clipper": "running",
+    }
+    court = body["courts"][0]
+    assert (court["court_id"], court["capture"]) == ("court1", "recording")
+    assert 0 <= court["segment_age_s"] < 5
+    assert body["clipper"]["ready_count"] == 2
+
+
+def test_status_never_started(client: TestClient) -> None:
+    body = client.get("/api/v1/status").json()
+    assert body["level"] == "error"
+    assert "capture is not running" in body["problems"]
+    assert body["courts"][0]["capture"] == "unknown"
+    assert body["clipper"] is None
+
+
+def test_status_detects_crash_and_clean_stop(client: TestClient) -> None:
+    now = datetime.now(UTC)
+    # capture was killed: its last heartbeat is 1 minute old
+    write_heartbeat(
+        status_dir(client), "capture", RUNNING, now, {"courts": {"court1": recording_court(now)}},
+        now=now - timedelta(minutes=1),
+    )  # fmt: skip
+    write_heartbeat(status_dir(client), "clipper", STOPPED, now, {})
+
+    body = client.get("/api/v1/status").json()
+    states = {s["name"]: s["state"] for s in body["services"]}
+    assert states["capture"] == "down"
+    assert states["clipper"] == "stopped"
+    assert body["courts"][0]["capture"] == "down"
+    assert body["level"] == "error"
+    assert "capture is down (heartbeat lost)" in body["problems"]
+
+
+def test_status_warnings_for_camera_and_failed_clip(client: TestClient) -> None:
+    now = datetime.now(UTC)
+    court = recording_court(
+        now, state="reconnecting", restarts=3, last_error="ffmpeg exited (code 8): 404"
+    )
+    write_heartbeat(status_dir(client), "capture", RUNNING, now, {"courts": {"court1": court}})
+    write_heartbeat(
+        status_dir(client), "clipper", RUNNING, now,
+        {"failed_count": 1, "last_error": "[court1] no segments", "last_error_at": now},
+    )  # fmt: skip
+
+    body = client.get("/api/v1/status").json()
+    assert body["level"] == "warning"
+    assert "Court 1: camera reconnecting" in body["problems"]
+    assert any("clip failed recently" in p for p in body["problems"])
+    assert body["courts"][0]["restarts"] == 3
+    assert body["courts"][0]["last_error"] == "ffmpeg exited (code 8): 404"
