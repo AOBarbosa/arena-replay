@@ -13,7 +13,8 @@ from types import FrameType
 from replay.capture.cleanup import CleanupLoop
 from replay.capture.supervisor import CaptureSupervisor, build_capture_command
 from replay.config import ConfigError, load_app_config
-from replay.logs import setup_logging
+from replay.logs import add_file_logging, setup_logging
+from replay.status import Heartbeat
 
 log = logging.getLogger("replay.capture")
 
@@ -25,6 +26,7 @@ def main() -> int:
     except ConfigError as exc:
         log.error("%s", exc)
         return 2
+    add_file_logging("capture", config.paths.logs_dir)
     if shutil.which("ffmpeg") is None:
         log.error("ffmpeg not found in PATH")
         return 2
@@ -45,6 +47,12 @@ def main() -> int:
         keep=timedelta(minutes=config.capture.buffer_minutes),
     )
 
+    heartbeat = Heartbeat(
+        config.paths.status_dir,
+        "capture",
+        lambda: {"courts": {s.court_id: s.status() for s in supervisors}},
+    )
+
     stop = threading.Event()
 
     def on_signal(signum: int, _frame: FrameType | None) -> None:
@@ -60,7 +68,7 @@ def main() -> int:
         segments_dir,
         config.capture.buffer_minutes,
     )
-    for thread in (*supervisors, cleanup):
+    for thread in (*supervisors, cleanup, heartbeat):
         thread.start()
 
     while not stop.wait(1):
@@ -70,6 +78,7 @@ def main() -> int:
         thread.stop()
     for thread in (*supervisors, cleanup):
         thread.join(timeout=10)
+    heartbeat.stop()
     return 0
 
 

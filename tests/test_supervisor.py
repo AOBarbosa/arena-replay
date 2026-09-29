@@ -94,9 +94,13 @@ def test_restarts_when_ffmpeg_exits(tmp_path: Path) -> None:
     supervisor.start()
     try:
         assert wait_until(lambda: supervisor.starts >= 3)
+        status = supervisor.status()
+        assert status["restarts"] >= 2
+        assert status["last_error"].startswith("ffmpeg exited (code 1)")
     finally:
         stop_and_join(supervisor)
     assert court_dir(tmp_path, "court1").is_dir()
+    assert supervisor.status()["state"] == "stopped"
 
 
 def test_restarts_when_stream_stalls(tmp_path: Path) -> None:
@@ -104,6 +108,7 @@ def test_restarts_when_stream_stalls(tmp_path: Path) -> None:
     supervisor.start()
     try:
         assert wait_until(lambda: supervisor.starts >= 2)
+        assert "stalled" in supervisor.status()["last_error"]
     finally:
         stop_and_join(supervisor)
 
@@ -115,6 +120,11 @@ def test_healthy_stream_is_not_restarted(tmp_path: Path) -> None:
         time.sleep(1.5)  # three times the stall timeout
         assert supervisor.starts == 1
         assert len(list_segments(tmp_path, "court1")) >= 5
+        status = supervisor.status()
+        assert status["state"] == "recording"
+        assert status["restarts"] == 0
+        assert status["last_segment_at"] is not None
+        assert status["last_error"] is None
     finally:
         stop_and_join(supervisor)
 
@@ -127,3 +137,4 @@ def test_missing_binary_keeps_retrying_and_stops(tmp_path: Path) -> None:
     time.sleep(0.3)
     stop_and_join(supervisor)
     assert supervisor.starts == 0
+    assert "failed to start ffmpeg" in supervisor.status()["last_error"]

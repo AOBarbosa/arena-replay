@@ -9,12 +9,22 @@ import subprocess
 import threading
 import time
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
-from replay.buffer import court_dir, latest_segment_name, segment_output_pattern
+from replay.buffer import (
+    court_dir,
+    latest_segment_name,
+    parse_segment_start,
+    segment_output_pattern,
+)
 from replay.config import CaptureConfig, CourtConfig
 
 log = logging.getLogger(__name__)
+
+# ffmpeg stderr lines that are noise: harmless at every RTSP (re)connection, or not a message
+NOISY_FFMPEG_LINES = ("Non-monotonic DTS", "Last message repeated")
 
 
 def build_capture_command(
@@ -77,9 +87,36 @@ class CaptureSupervisor(threading.Thread):
         self._stop_event = threading.Event()
         self._env = {**os.environ, "TZ": "UTC"}  # segment names in UTC
         self.starts = 0
+        # Read by the heartbeat thread; plain attribute writes are atomic enough
+        self._state = "starting"
+        self._state_since = datetime.now(UTC)
+        self._last_error: str | None = None
+        self._last_error_at: datetime | None = None
+        self._last_ffmpeg_line: str | None = None
 
     def stop(self) -> None:
         self._stop_event.set()
+
+    def status(self) -> dict[str, Any]:
+        """Snapshot for the heartbeat: connecting | recording | reconnecting | stopped."""
+        latest = latest_segment_name(self._segments_dir, self.court_id)
+        return {
+            "state": self._state,
+            "since": self._state_since,
+            "restarts": max(self.starts - 1, 0),
+            "last_segment_at": parse_segment_start(latest, self.court_id) if latest else None,
+            "last_error": self._last_error,
+            "last_error_at": self._last_error_at,
+        }
+
+    def _set_state(self, state: str) -> None:
+        if state != self._state:
+            self._state = state
+            self._state_since = datetime.now(UTC)
+
+    def _record_error(self, message: str) -> None:
+        self._last_error = message
+        self._last_error_at = datetime.now(UTC)
 
     def run(self) -> None:
         court_dir(self._segments_dir, self.court_id).mkdir(parents=True, exist_ok=True)
@@ -93,6 +130,7 @@ class CaptureSupervisor(threading.Thread):
             delay = backoff_delay(
                 failures, self._capture.reconnect_min_s, self._capture.reconnect_max_s
             )
+            self._set_state("reconnecting")
             log.warning(
                 "[%s] reconnecting in %.1f s (consecutive failure %d)",
                 self.court_id,
@@ -100,6 +138,7 @@ class CaptureSupervisor(threading.Thread):
                 failures,
             )
             self._stop_event.wait(delay)
+        self._set_state("stopped")
         log.info("[%s] capture stopped", self.court_id)
 
     def _run_once(self) -> bool:
@@ -119,8 +158,12 @@ class CaptureSupervisor(threading.Thread):
             )
         except OSError as exc:
             log.error("[%s] failed to start ffmpeg: %s", self.court_id, exc)
+            self._record_error(f"failed to start ffmpeg: {exc}")
             return False
         self.starts += 1
+        # After a failure it stays "reconnecting" until segments arrive again
+        self._set_state("connecting" if self._state == "starting" else "reconnecting")
+        self._last_ffmpeg_line = None
         reader = threading.Thread(target=self._log_stderr, args=(proc,), daemon=True)
         reader.start()
 
@@ -137,10 +180,14 @@ class CaptureSupervisor(threading.Thread):
                 last_progress = time.monotonic()
                 if not produced:
                     log.info("[%s] receiving segments", self.court_id)
+                    self._set_state("recording")
                     produced = True
             code = proc.poll()
             if code is not None:
                 log.warning("[%s] ffmpeg exited (code %s)", self.court_id, code)
+                reader.join(timeout=1)  # so the last stderr line is known
+                detail = f": {self._last_ffmpeg_line}" if self._last_ffmpeg_line else ""
+                self._record_error(f"ffmpeg exited (code {code}){detail}")
                 break
             stalled_for = time.monotonic() - last_progress
             if stalled_for > self._capture.stall_timeout_s:
@@ -149,6 +196,7 @@ class CaptureSupervisor(threading.Thread):
                     self.court_id,
                     stalled_for,
                 )
+                self._record_error(f"no new segment for {stalled_for:.0f} s (stream stalled)")
                 self._terminate(proc)
                 break
         reader.join(timeout=2)
@@ -170,5 +218,10 @@ class CaptureSupervisor(threading.Thread):
         assert proc.stderr is not None
         for line in proc.stderr:
             line = line.rstrip()
-            if line:
-                log.warning("[%s] ffmpeg: %s", self.court_id, line)
+            if not line:
+                continue
+            if any(noise in line for noise in NOISY_FFMPEG_LINES):
+                log.debug("[%s] ffmpeg: %s", self.court_id, line)
+                continue
+            self._last_ffmpeg_line = line
+            log.warning("[%s] ffmpeg: %s", self.court_id, line)
