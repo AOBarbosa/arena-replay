@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterable
 from datetime import datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import select, tuple_, update
 from sqlalchemy.dialects.postgresql import insert
@@ -61,10 +61,12 @@ class Repository:
         triggered_at: datetime,
         start_at: datetime,
         end_at: datetime,
+        clip_id: UUID | None = None,
     ) -> Clip:
         for value in (triggered_at, start_at, end_at):
             _require_aware(value)
         row = ClipRow(
+            id=clip_id or uuid4(),
             court_id=court_id,
             triggered_at=triggered_at,
             start_at=start_at,
@@ -143,6 +145,16 @@ class Repository:
             )
         stmt = stmt.order_by(ClipRow.triggered_at.desc(), ClipRow.id.desc()).limit(
             limit
+        )
+        with self._sessions() as session:
+            return [_clip(r) for r in session.scalars(stmt)]
+
+    def list_recent_clips(self, *, limit: int) -> list[Clip]:
+        """Latest clips in any status, newest first (development tools)."""
+        stmt = (
+            select(ClipRow)
+            .order_by(ClipRow.triggered_at.desc(), ClipRow.id.desc())
+            .limit(limit)
         )
         with self._sessions() as session:
             return [_clip(r) for r in session.scalars(stmt)]

@@ -121,3 +121,16 @@ def test_cursor_pagination_with_equal_timestamps(repo: Repository) -> None:
 
     assert len(seen) == 5
     assert set(seen) == ids
+
+
+@pytest.mark.usefixtures("courts")
+def test_create_clip_with_given_id_and_list_recent(repo: Repository) -> None:
+    clip_id = uuid4()
+    clip = repo.create_clip("court1", T0, T0, T0, clip_id=clip_id)
+    assert clip.id == clip_id
+    ready = make_ready_clip(repo, "court2", T0 + timedelta(minutes=1))
+    repo.mark_clip_failed(clip_id, "boom")
+
+    recent = repo.list_recent_clips(limit=10)
+    assert [c.id for c in recent] == [ready.id, clip_id]
+    assert recent[1].status is ClipStatus.FAILED
