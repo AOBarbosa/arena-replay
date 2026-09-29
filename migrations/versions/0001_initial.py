@@ -1,4 +1,4 @@
-"""tabelas courts e clips
+"""courts and clips tables
 
 Revision ID: 0001
 Revises:

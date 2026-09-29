@@ -1,4 +1,4 @@
-"""Ambiente do Alembic. A URL vem de `sqlalchemy.url` (testes) ou do DATABASE_URL."""
+"""Alembic environment. The URL comes from `sqlalchemy.url` (tests) or DATABASE_URL."""
 
 from logging.config import fileConfig
 
@@ -14,7 +14,7 @@ if config.config_file_name is not None and config.attributes.get("configure_logg
     fileConfig(config.config_file_name)
 
 if not config.get_main_option("sqlalchemy.url"):
-    # '%' precisa ser escapado por causa da interpolação do configparser
+    # '%' must be escaped because of configparser interpolation
     url = load_env_settings().database_url
     config.set_main_option("sqlalchemy.url", url.replace("%", "%%"))
 
