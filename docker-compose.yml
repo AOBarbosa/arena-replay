@@ -5,9 +5,9 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:?defina POSTGRES_USER no .env}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
-      POSTGRES_DB: ${POSTGRES_DB:?defina POSTGRES_DB no .env}
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
       TZ: UTC
     ports:
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
@@ -20,8 +20,8 @@ services:
       timeout: 3s
       retries: 10
 
-  # Servidor RTSP usado apenas pelo scripts/fake_camera.sh (desenvolvimento).
-  # Só sobe com: docker compose --profile fakecam up -d
+  # RTSP server used only by scripts/fake_camera.sh (development).
+  # Starts only with: docker compose --profile fakecam up -d
   mediamtx:
     image: bluenviron/mediamtx:1
     profiles: ["fakecam"]

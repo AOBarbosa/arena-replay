@@ -1,7 +1,7 @@
 [project]
 name = "arena-replay"
 version = "0.1.0"
-description = "Sistema de replay instantâneo para quadras de areia"
+description = "Instant replay system for beach courts"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "fastapi>=0.115",

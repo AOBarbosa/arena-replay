@@ -1,6 +1,6 @@
 #!/bin/sh
-# Cria o banco de testes ao lado do banco principal.
-# Só roda quando o volume está vazio (primeira inicialização do container).
+# Creates the test database next to the main one.
+# Runs only when the volume is empty (first container start).
 set -e
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<EOSQL
 CREATE DATABASE "${POSTGRES_DB}_test";

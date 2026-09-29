@@ -1,39 +1,39 @@
-# Copie para config.yaml e ajuste. Caminhos relativos são resolvidos a partir
-# da pasta deste arquivo.
+# Copy to config.yaml and adjust. Relative paths are resolved from this
+# file's folder.
 
-# Fuso usado apenas na exibição e no filtro ?date= da API. O banco guarda UTC.
+# Timezone used only for display and for the API's ?date= filter. The database stores UTC.
 timezone: America/Fortaleza
 
 courts:
-  - id: court1                # usado no nome dos arquivos e na API: [a-z0-9_-]
-    name: Quadra 1
-    # IP Webcam (Android): use o stream RTSP H.264, não o MJPEG.
+  - id: court1                # used in file names and in the API: [a-z0-9_-]
+    name: Court 1
+    # IP Webcam (Android): use the RTSP H.264 stream, not MJPEG.
     # stream_url: rtsp://192.168.0.50:8080/h264_ulaw.sdp
     stream_url: rtsp://127.0.0.1:8554/court1   # scripts/fake_camera.sh
-    trigger_key: space        # nome de tecla do pynput (space, f1, enter...) ou um caractere
+    trigger_key: space        # pynput key name (space, f1, enter...) or a single character
 
 capture:
-  segment_s: 2                # duração alvo; com -c copy o corte real acontece no keyframe
-  buffer_minutes: 10          # quanto histórico manter por quadra
-  latency_offset_s: 1.0       # atraso estimado do stream (horário do segmento - atraso = horário real)
-  audio: true                 # false descarta o áudio (-an); true transcodifica para AAC
+  segment_s: 2                # target length; with -c copy the actual cut happens at keyframes
+  buffer_minutes: 10          # how much history to keep per court
+  latency_offset_s: 1.0       # estimated stream delay (segment time - delay = real time)
+  audio: true                 # false drops audio (-an); true transcodes it to AAC
   rtsp_transport: tcp
   reconnect_min_s: 1
   reconnect_max_s: 30
-  stall_timeout_s: 15         # sem segmento novo por esse tempo = reinicia o ffmpeg
+  stall_timeout_s: 15         # no new segment for this long = restart ffmpeg
 
 clip:
-  duration_s: 30              # segundos antes do gatilho
-  post_roll_s: 3              # segundos depois do gatilho
-  # copy              -> sem recodificar (rápido, corte preciso só em keyframes)
-  # libx264           -> recodifica em CPU (preciso, pesado no i3)
-  # h264_vaapi        -> recodifica com Intel Quick Sync (Ubuntu)
-  # h264_videotoolbox -> recodifica em hardware no macOS (apenas desenvolvimento)
+  duration_s: 30              # seconds before the trigger
+  post_roll_s: 3              # seconds after the trigger
+  # copy              -> no re-encoding (fast, cuts are exact only at keyframes)
+  # libx264           -> CPU re-encoding (exact, heavy on the i3)
+  # h264_vaapi        -> re-encoding with Intel Quick Sync (Ubuntu)
+  # h264_videotoolbox -> hardware re-encoding on macOS (development only)
   encoder: copy
   vaapi_device: /dev/dri/renderD128
 
 trigger:
-  debounce_s: 5               # ignora novos gatilhos da mesma quadra nesse intervalo
+  debounce_s: 5               # ignore new triggers for the same court within this interval
 
 paths:
   segments_dir: data/segments
@@ -43,4 +43,4 @@ api:
   host: 127.0.0.1
   port: 8000
   cors_origins:
-    - http://localhost:3000   # futuro app Next.js
+    - http://localhost:3000   # future Next.js app
