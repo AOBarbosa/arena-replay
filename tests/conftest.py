@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import shutil
+import subprocess
 from collections.abc import Iterator
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -58,3 +61,42 @@ def repo(migrated_db: str) -> Iterator[Repository]:
     repository = Repository.from_url(migrated_db)
     yield repository
     repository.dispose()
+
+
+def make_segment_files(
+    segments_dir: Path, court_id: str, start: datetime, count: int, segment_s: int = 2
+) -> list[Path]:
+    """Generates `count` real .ts segments (video + AAC audio, keyframe every segment)
+    named like the capture service would, starting at `start` (UTC)."""
+    court_dir = segments_dir / court_id
+    court_dir.mkdir(parents=True, exist_ok=True)
+    raw_dir = court_dir / ".raw"
+    raw_dir.mkdir(exist_ok=True)
+    fps = 15
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+            "-f", "lavfi", "-i", f"testsrc2=size=320x180:rate={fps}",
+            "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000",
+            "-t", str(count * segment_s),
+            "-c:v", "libx264", "-preset", "ultrafast", "-g", str(segment_s * fps),
+            "-c:a", "aac",
+            "-f", "segment", "-segment_time", str(segment_s), "-reset_timestamps", "1",
+            str(raw_dir / "%03d.ts"),
+        ],
+        check=True,
+    )  # fmt: skip
+    paths = []
+    for i, raw in enumerate(sorted(raw_dir.glob("*.ts"))):
+        name = start + timedelta(seconds=i * segment_s)
+        target = court_dir / f"{court_id}_{name:%Y%m%d_%H%M%S}.ts"
+        raw.replace(target)
+        paths.append(target)
+    raw_dir.rmdir()
+    return paths
+
+
+requires_ffmpeg = pytest.mark.skipif(
+    shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None,
+    reason="ffmpeg/ffprobe not installed",
+)
