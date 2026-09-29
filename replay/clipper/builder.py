@@ -184,10 +184,12 @@ def build_clip(
         log.warning("thumbnail failed, keeping the clip without it: %s", exc)
         thumbnail = None
 
+    # Wall-clock span, not start + duration: with gaps the content is shorter than the span
+    end_at = min(window_end, selection.end_at, start_at + timedelta(seconds=wanted_s))
     return BuiltClip(
         video=video,
         thumbnail=thumbnail,
         duration_s=duration_s,
         start_at=start_at,
-        end_at=start_at + timedelta(seconds=duration_s),
+        end_at=end_at,
     )

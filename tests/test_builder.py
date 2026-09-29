@@ -136,3 +136,5 @@ def test_build_real_clip_with_gap(tmp_path: Path) -> None:
 
     built = build_clip(selection, at(0), at(30), tmp_path / "work", ClipConfig(), 20)
     assert built.duration_s == pytest.approx(20, abs=2.1)
+    # The clip spans 0-30 s of real time even though 10 s are missing
+    assert (built.start_at, built.end_at) == (at(0), at(30))
