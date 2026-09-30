@@ -25,6 +25,7 @@ Etapas concluídas: configuração e banco; captura; gatilho e clipper; API; mon
 - Múltiplas quadras, cada uma com sua câmera e seu gatilho, no mesmo PC.
 - Armazenamento em nuvem (Cloudflare R2 ou S3) e acesso externo dos alunos. `ClipStorage.local_path()` retorna `None` para storage remoto e a API redireciona para `url_for()`.
 - Possível câmera lenta (câmeras de 60 fps).
+- Versão do clipe para redes sociais (Instagram Reels, TikTok): vertical 9:16 (1080×1920). Decisão adiada até definir a câmera definitiva e seu posicionamento. Em aberto: enquadramento (quadra inteira sobre fundo desfocado, corte fixo no centro ou faixas pretas) e se é um arquivo extra (nova coluna/migration, endpoint próprio, `openapi.json`) ou substitui o clipe. Exige recodificação (não funciona com `encoder: copy`); no i3, preferir `h264_vaapi`.
 - Possível containerização dos demais serviços.
 - Alertas externos (Telegram/e-mail) quando `/api/v1/status` indicar problema.
 
