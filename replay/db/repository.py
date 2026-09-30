@@ -143,19 +143,13 @@ class Repository:
                 tuple_(ClipRow.triggered_at, ClipRow.id)
                 < tuple_(_require_aware(cursor_at), cursor_id)
             )
-        stmt = stmt.order_by(ClipRow.triggered_at.desc(), ClipRow.id.desc()).limit(
-            limit
-        )
+        stmt = stmt.order_by(ClipRow.triggered_at.desc(), ClipRow.id.desc()).limit(limit)
         with self._sessions() as session:
             return [_clip(r) for r in session.scalars(stmt)]
 
     def list_recent_clips(self, *, limit: int) -> list[Clip]:
         """Latest clips in any status, newest first (development tools)."""
-        stmt = (
-            select(ClipRow)
-            .order_by(ClipRow.triggered_at.desc(), ClipRow.id.desc())
-            .limit(limit)
-        )
+        stmt = select(ClipRow).order_by(ClipRow.triggered_at.desc(), ClipRow.id.desc()).limit(limit)
         with self._sessions() as session:
             return [_clip(r) for r in session.scalars(stmt)]
 
@@ -163,9 +157,7 @@ class Repository:
         stmt = update(ClipRow).where(ClipRow.id == clip_id).values(**values)
         with self._sessions.begin() as session:
             if session.execute(stmt).rowcount == 0:
-                log.warning(
-                    "clip %s not found when updating to %s", clip_id, values
-                )
+                log.warning("clip %s not found when updating to %s", clip_id, values)
 
 
 def _require_aware(value: datetime) -> datetime:
