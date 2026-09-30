@@ -1,10 +1,18 @@
 from __future__ import annotations
 
+import io
 import logging
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from replay.logs import OnlyFailedRequests, add_file_logging
+from replay.logs import (
+    LEVEL_COLORS,
+    RESET,
+    ColorFormatter,
+    OnlyFailedRequests,
+    add_file_logging,
+    use_color,
+)
 from replay.status import (
     RUNNING,
     STOPPED,
@@ -94,3 +102,28 @@ def test_access_log_filter_keeps_only_errors() -> None:
     assert log_filter.filter(access_record(500))
     other = logging.LogRecord("replay.x", logging.INFO, __file__, 1, "hello", None, None)
     assert log_filter.filter(other)
+
+
+def test_use_color_only_on_terminals() -> None:
+    class Tty:
+        def isatty(self) -> bool:
+            return True
+
+    assert use_color(Tty(), env={"TERM": "xterm"})
+    assert not use_color(Tty(), env={"TERM": "xterm", "NO_COLOR": "1"})
+    assert not use_color(Tty(), env={"TERM": "dumb"})
+    assert not use_color(io.StringIO(), env={})
+    assert use_color(io.StringIO(), env={"FORCE_COLOR": "1"})
+
+
+def test_color_formatter_colors_level_and_keeps_record_intact() -> None:
+    formatter = ColorFormatter("%(levelname)-7s %(message)s")
+    warning = logging.LogRecord(
+        "replay.x", logging.WARNING, __file__, 1, "[%s] slow", ("c1",), None
+    )
+    assert formatter.format(warning) == f"{LEVEL_COLORS[logging.WARNING]}WARNING{RESET} [c1] slow"
+    error = logging.LogRecord("replay.x", logging.ERROR, __file__, 1, "[%s] down", ("c1",), None)
+    red = LEVEL_COLORS[logging.ERROR]
+    assert formatter.format(error) == f"{red}ERROR  {RESET} {red}[c1] down{RESET}"
+    # The same record then reaches the file handler without color codes
+    assert logging.Formatter("%(levelname)s %(message)s").format(error) == "ERROR [c1] down"
